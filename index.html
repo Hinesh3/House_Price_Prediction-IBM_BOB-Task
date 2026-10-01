@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>House Price Prediction</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+      background: #f0f4f8;
+      color: #1f2328;
+      min-height: 100vh;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+      color: #fff;
+      padding: 2rem 1.5rem 1.5rem;
+      text-align: center;
+    }
+    header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.5px; }
+    header p  { margin-top: .4rem; opacity: .85; font-size: .95rem; }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+
+    /* Stats bar */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .stat-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      text-align: center;
+    }
+    .stat-card .val { font-size: 1.5rem; font-weight: 700; color: #2563eb; }
+    .stat-card .lbl { font-size: .78rem; color: #57606a; margin-top: .2rem; }
+
+    /* Model info */
+    .model-info {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      align-items: center;
+    }
+    .model-info .badge {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border-radius: 6px;
+      padding: .35rem .85rem;
+      font-size: .85rem;
+      font-weight: 600;
+    }
+    .model-info .metric { font-size: .9rem; color: #57606a; }
+    .model-info .metric span { font-weight: 700; color: #1f2328; }
+
+    /* Prediction form */
+    .card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .card h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 1.25rem; color: #1f2328; }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+    .field label {
+      display: block;
+      font-size: .8rem;
+      font-weight: 600;
+      color: #57606a;
+      margin-bottom: .35rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .field input, .field select {
+      width: 100%;
+      padding: .55rem .75rem;
+      border: 1px solid #d1d5db;
+      border-radius: 7px;
+      font-size: .9rem;
+      color: #1f2328;
+      background: #f9fafb;
+      transition: border .15s, box-shadow .15s;
+    }
+    .field input:focus, .field select:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37,99,235,.15);
+      background: #fff;
+    }
+
+    .predict-btn {
+      margin-top: 1.5rem;
+      padding: .7rem 2.5rem;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, transform .1s;
+    }
+    .predict-btn:hover  { background: #1d4ed8; }
+    .predict-btn:active { transform: scale(.97); }
+
+    /* Result box */
+    .result-box {
+      display: none;
+      margin-top: 1.5rem;
+      background: linear-gradient(135deg, #eff6ff, #e0f2fe);
+      border: 1px solid #bfdbfe;
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+      text-align: center;
+    }
+    .result-box .price-label { font-size: .85rem; color: #57606a; font-weight: 600; text-transform: uppercase; }
+    .result-box .price-val   { font-size: 2.4rem; font-weight: 800; color: #1d4ed8; margin-top: .25rem; }
+    .result-box .sub         { font-size: .8rem; color: #57606a; margin-top: .3rem; }
+
+    /* Chart */
+    canvas { display: block; width: 100% !important; }
+
+    /* Feature importance */
+    .fi-bar-wrap { margin-bottom: .6rem; }
+    .fi-label    { display: flex; justify-content: space-between; font-size: .82rem; margin-bottom: .2rem; }
+    .fi-track    { background: #f0f4f8; border-radius: 99px; height: 8px; overflow: hidden; }
+    .fi-fill     { height: 100%; border-radius: 99px; background: #2563eb; transition: width .6s ease; }
+
+    footer {
+      text-align: center;
+      font-size: .75rem;
+      color: #9ca3af;
+      padding: 1.25rem 0 .75rem;
+      border-top: 1px solid #e5e7eb;
+      margin-top: 2rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🏡 House Price Prediction</h1>
+  <p>Multiple Linear Regression · Trained on 545 real housing records</p>
+</header>
+
+<div class="container">
+
+  <!-- Stats bar -->
+  <div class="stats-bar" id="statsBar">
+    <div class="stat-card"><div class="val" id="s-count">545</div><div class="lbl">Training Samples</div></div>
+    <div class="stat-card"><div class="val" id="s-r2">—</div><div class="lbl">R² Score</div></div>
+    <div class="stat-card"><div class="val" id="s-rmse">—</div><div class="lbl">RMSE</div></div>
+    <div class="stat-card"><div class="val" id="s-mean">—</div><div class="lbl">Avg. Price</div></div>
+  </div>
+
+  <!-- Model info -->
+  <div class="model-info">
+    <span class="badge">Multiple Linear Regression</span>
+    <span class="badge">12 Features</span>
+    <span class="metric">Algorithm: <span>Ordinary Least Squares (Normal Equation)</span></span>
+    <span class="metric">Trained: <span id="trainTime">—</span> ms</span>
+  </div>
+
+  <!-- Prediction form -->
+  <div class="card">
+    <h2>🔮 Predict House Price</h2>
+    <div class="form-grid">
+      <div class="field">
+        <label>Area (sq ft)</label>
+        <input type="number" id="f-area" value="6000" min="500" max="20000" />
+      </div>
+      <div class="field">
+        <label>Bedrooms</label>
+        <input type="number" id="f-bedrooms" value="3" min="1" max="10" />
+      </div>
+      <div class="field">
+        <label>Bathrooms</label>
+        <input type="number" id="f-bathrooms" value="1" min="1" max="6" />
+      </div>
+      <div class="field">
+        <label>Stories</label>
+        <input type="number" id="f-stories" value="2" min="1" max="4" />
+      </div>
+      <div class="field">
+        <label>Parking Spaces</label>
+        <input type="number" id="f-parking" value="1" min="0" max="4" />
+      </div>
+      <div class="field">
+        <label>Main Road</label>
+        <select id="f-mainroad">
+          <option value="1">Yes</option>
+          <option value="0">No</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Guest Room</label>
+        <select id="f-guestroom">
+          <option value="0">No</option>
+          <option value="1">Yes</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Basement</label>
+        <select id="f-basement">
+          <option value="0">No</option>
+          <option value="1">Yes</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Hot Water Heating</label>
+        <select id="f-hotwaterheating">
+          <option value="0">No</option>
+          <option value="1">Yes</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Air Conditioning</label>
+        <select id="f-airconditioning">
+          <option value="0">No</option>
+          <option value="1">Yes</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Preferred Area</label>
+        <select id="f-prefarea">
+          <option value="0">No</option>
+          <option value="1">Yes</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Furnishing Status</label>
+        <select id="f-furnishing">
+          <option value="1">Furnished</option>
+          <option value="0.5">Semi-Furnished</option>
+          <option value="0">Unfurnished</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="predict-btn" onclick="predict()">Predict Price</button>
+
+    <div class="result-box" id="resultBox">
+      <div class="price-label">Estimated House Price</div>
+      <div class="price-val" id="resultPrice">—</div>
+      <div class="sub" id="resultSub"></div>
+    </div>
+  </div>
+
+  <!-- Actual vs Predicted chart -->
+  <div class="card">
+    <h2>📊 Actual vs Predicted Prices (sample of 80)</h2>
+    <canvas id="avpChart" height="300"></canvas>
+  </div>
+
+  <!-- Feature Importance -->
+  <div class="card">
+    <h2>📈 Feature Importance (Normalized Coefficients)</h2>
+    <div id="fiContainer"></div>
+  </div>
+
+  <!-- Residual chart -->
+  <div class="card">
+    <h2>📉 Residuals Distribution</h2>
+    <canvas id="residChart" height="260"></canvas>
+  </div>
+
+</div>
+
+<footer>Made with IBM Bob</footer>
+
+<!-- Lightweight chart lib (CDN — GitHub Pages serves this fine) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script>
+// ─── Embedded Dataset ────────────────────────────────────────────────────────
+const RAW_CSV = `price,area,bedrooms,bathrooms,stories,mainroad,guestroom,basement,hotwaterheating,airconditioning,parking,prefarea,furnishingstatus
+13300000,7420,4,2,3,yes,no,no,no,yes,2,yes,furnished
+12250000,8960,4,4,4,yes,no,no,no,yes,3,no,furnished
+12250000,9960,3,2,2,yes,no,yes,no,no,2,yes,semi-furnished
+12215000,7500,4,2,2,yes,no,yes,no,yes,3,yes,furnished
+11410000,7420,4,1,2,yes,yes,yes,no,yes,2,no,furnished
+10850000,7500,3,3,1,yes,no,yes,no,yes,2,yes,semi-furnished
+10150000,8580,4,3,4,yes,no,no,no,yes,2,yes,semi-furnished
+10150000,16200,5,3,2,yes,no,no,no,no,0,no,unfurnished
+9870000,8100,4,1,2,yes,yes,yes,no,yes,2,yes,furnished
+9800000,5750,3,2,4,yes,yes,no,no,yes,1,yes,unfurnished
+9800000,13200,3,1,2,yes,no,yes,no,yes,2,yes,furnished
+9681000,6000,4,3,2,yes,yes,yes,yes,no,2,no,semi-furnished
+9310000,6550,4,2,2,yes,no,no,no,yes,1,yes,semi-furnished
+9240000,3500,4,2,2,yes,no,no,yes,no,2,no,furnished
+9240000,7800,3,2,2,yes,no,no,no,no,0,yes,semi-furnished
+9100000,6000,4,1,2,yes,no,yes,no,no,2,no,semi-furnished
+9100000,6600,4,2,2,yes,yes,yes,no,yes,1,yes,unfurnished
+8960000,8500,3,2,4,yes,no,no,no,yes,2,no,furnished
+8890000,4600,3,2,2,yes,yes,no,no,yes,2,no,furnished
+8855000,6420,3,2,2,yes,no,no,no,yes,1,yes,semi-furnished
+8750000,4320,3,1,2,yes,no,yes,yes,no,2,no,semi-furnished
+8680000,7155,3,2,1,yes,yes,yes,no,yes,2,no,unfurnished
+8645000,8050,3,1,1,yes,yes,yes,no,yes,1,no,furnished
+8645000,4560,3,2,2,yes,yes,yes,no,yes,1,no,furnished
+8575000,8800,3,2,2,yes,no,no,no,yes,2,no,furnished
+8540000,6540,4,2,2,yes,yes,yes,no,yes,2,yes,furnished
+8463000,6000,3,2,4,yes,yes,yes,no,yes,0,yes,semi-furnished
+8400000,8875,3,1,1,yes,no,no,no,no,1,no,semi-furnished
+8400000,7950,5,2,2,yes,no,yes,yes,no,2,no,unfurnished
+8400000,5500,4,2,2,yes,no,yes,no,yes,1,yes,semi-furnished
+8400000,7475,3,2,4,yes,no,no,no,yes,2,no,unfurnished
+8400000,7000,3,1,4,yes,no,no,no,yes,2,no,semi-furnished
+8295000,4880,4,2,2,yes,no,no,no,yes,1,yes,furnished
+8190000,5960,3,3,2,yes,yes,yes,no,no,1,no,unfurnished
+8120000,6840,5,1,2,yes,yes,yes,no,yes,1,no,furnished
+8080940,7000,3,2,4,yes,no,no,no,yes,2,no,furnished
+8043000,7482,3,2,3,yes,no,no,yes,no,1,yes,furnished
+7980000,9000,4,2,4,yes,no,no,no,yes,2,no,furnished
+7962500,6000,3,1,4,yes,yes,no,no,yes,2,no,unfurnished
+7910000,6000,4,2,4,yes,no,no,no,yes,1,no,semi-furnished
+7875000,6550,3,1,2,yes,no,yes,no,yes,0,yes,furnished
+7840000,6360,3,2,4,yes,no,no,no,yes,0,yes,furnished
+7700000,6480,3,2,4,yes,no,no,no,yes,2,no,unfurnished
+7700000,6000,4,2,4,yes,no,no,no,no,2,no,semi-furnished
+7560000,6000,4,2,4,yes,no,no,no,yes,1,no,furnished
+7560000,6000,3,2,3,yes,no,no,no,yes,0,no,semi-furnished
+7525000,6000,3,2,4,yes,no,no,no,yes,1,no,furnished
+7490000,6600,3,1,4,yes,no,no,no,yes,3,yes,furnished
+7455000,4300,3,2,2,yes,no,yes,no,no,1,no,unfurnished
+7420000,7440,3,2,1,yes,yes,yes,no,yes,0,yes,semi-furnished
+7420000,7440,3,2,4,yes,no,no,no,no,1,yes,unfurnished
+7420000,6325,3,1,4,yes,no,no,no,yes,1,no,unfurnished
+7350000,6000,4,2,4,yes,yes,no,no,yes,1,no,furnished
+7350000,5150,3,2,4,yes,no,no,no,yes,2,no,semi-furnished
+7350000,6000,3,2,2,yes,yes,no,no,yes,1,no,semi-furnished
+7350000,6000,3,1,2,yes,no,no,no,yes,1,no,unfurnished
+7343000,11440,4,1,2,yes,no,yes,no,no,1,yes,semi-furnished
+7245000,9000,4,2,4,yes,yes,no,no,yes,1,yes,furnished
+7210000,7680,4,2,4,yes,yes,no,no,yes,1,no,semi-furnished
+7210000,6000,3,2,4,yes,yes,no,no,yes,1,no,furnished
+7140000,6000,3,2,2,yes,yes,no,no,no,1,no,semi-furnished
+7070000,8880,2,1,1,yes,no,no,no,yes,1,no,semi-furnished
+7070000,6240,4,2,2,yes,no,no,no,yes,1,no,furnished
+7035000,6360,4,2,3,yes,no,no,no,yes,2,yes,furnished
+7000000,11175,3,1,1,yes,no,yes,no,yes,1,yes,furnished
+6930000,8880,3,2,2,yes,no,yes,no,yes,1,no,furnished
+6930000,13200,2,1,1,yes,no,yes,yes,no,1,no,furnished
+6895000,7700,3,2,1,yes,no,no,no,no,2,no,unfurnished
+6860000,6000,3,1,1,yes,no,no,no,yes,1,no,furnished
+6790000,12090,4,2,2,yes,no,no,no,no,2,yes,furnished
+6790000,4000,3,2,2,yes,no,yes,no,yes,0,yes,semi-furnished
+6755000,6000,4,2,4,yes,no,no,no,yes,0,no,unfurnished
+6720000,5020,3,1,4,yes,no,no,no,yes,0,yes,unfurnished
+6685000,6600,2,2,4,yes,no,yes,no,no,0,yes,furnished
+6650000,4040,3,1,2,yes,no,yes,yes,no,1,no,furnished
+6650000,4260,4,2,2,yes,no,no,yes,no,0,no,semi-furnished
+6650000,6420,3,2,3,yes,no,no,no,yes,0,yes,furnished
+6650000,6500,3,2,3,yes,no,no,no,yes,0,yes,furnished
+6650000,5700,3,1,1,yes,yes,yes,no,yes,2,yes,furnished
+6650000,6000,3,2,3,yes,yes,no,no,yes,0,no,furnished
+6629000,6000,3,1,2,yes,no,no,yes,no,1,yes,semi-furnished
+6615000,4000,3,2,2,yes,no,yes,no,yes,1,no,semi-furnished
+6615000,10500,3,2,1,yes,no,yes,no,yes,1,yes,furnished
+6580000,6000,3,2,4,yes,no,no,no,yes,0,no,semi-furnished
+6510000,3760,3,1,2,yes,no,no,yes,no,2,no,semi-furnished
+6510000,8250,3,2,3,yes,no,no,no,yes,0,no,furnished
+6510000,6670,3,1,3,yes,no,yes,no,no,0,yes,unfurnished
+6475000,3960,3,1,1,yes,no,yes,no,no,2,no,semi-furnished
+6475000,7410,3,1,1,yes,yes,yes,no,yes,2,yes,unfurnished
+6440000,8580,5,3,2,yes,no,no,no,no,2,no,furnished
+6440000,5000,3,1,2,yes,no,no,no,yes,0,no,semi-furnished
+6419000,6750,2,1,1,yes,yes,yes,no,no,2,yes,furnished
+6405000,4800,3,2,4,yes,yes,no,no,yes,0,no,furnished
+6300000,7200,3,2,1,yes,no,yes,no,yes,3,no,semi-furnished
+6300000,6000,4,2,4,yes,no,no,no,no,1,no,semi-furnished
+6300000,4100,3,2,3,yes,no,no,no,yes,2,no,semi-furnished
+6300000,9000,3,1,1,yes,no,yes,no,no,1,yes,furnished
+6300000,6400,3,1,1,yes,yes,yes,no,yes,1,yes,semi-furnished
+6293000,6600,3,2,3,yes,no,no,no,yes,0,yes,unfurnished
+6265000,6000,4,1,3,yes,yes,yes,no,no,0,yes,unfurnished
+6230000,6600,3,2,1,yes,no,yes,no,yes,0,yes,unfurnished
+6230000,5500,3,1,3,yes,no,no,no,no,1,yes,unfurnished
+6195000,5500,3,2,4,yes,yes,no,no,yes,1,no,semi-furnished
+6195000,6350,3,2,3,yes,yes,no,no,yes,0,no,furnished
+6195000,5500,3,2,1,yes,yes,yes,no,no,2,yes,furnished
+6160000,4500,3,1,4,yes,no,no,no,yes,0,no,unfurnished
+6160000,5450,4,2,1,yes,no,yes,no,yes,0,yes,semi-furnished
+6125000,6420,3,1,3,yes,no,yes,no,no,0,yes,unfurnished
+6107500,3240,4,1,3,yes,no,no,no,no,1,no,semi-furnished
+6090000,6615,4,2,2,yes,yes,no,yes,no,1,no,semi-furnished
+6090000,6600,3,1,1,yes,yes,yes,no,no,2,yes,semi-furnished
+6090000,8372,3,1,3,yes,no,no,no,yes,2,no,unfurnished
+6083000,4300,6,2,2,yes,no,no,no,no,0,no,furnished
+6083000,9620,3,1,1,yes,no,yes,no,no,2,yes,furnished
+6020000,6800,2,1,1,yes,yes,yes,no,no,2,no,furnished
+6020000,8000,3,1,1,yes,yes,yes,no,yes,2,yes,semi-furnished
+6020000,6900,3,2,1,yes,yes,yes,no,no,0,yes,unfurnished
+5950000,3700,4,1,2,yes,yes,no,no,yes,0,no,furnished
+5950000,6420,3,1,1,yes,no,yes,no,yes,0,yes,furnished
+5950000,7020,3,1,1,yes,no,yes,no,yes,2,yes,semi-furnished
+5950000,6540,3,1,1,yes,yes,yes,no,no,2,yes,furnished
+5950000,7231,3,1,2,yes,yes,yes,no,yes,0,yes,semi-furnished
+5950000,6254,4,2,1,yes,no,yes,no,no,1,yes,semi-furnished
+5950000,7320,4,2,2,yes,no,no,no,no,0,no,furnished
+5950000,6525,3,2,4,yes,no,no,no,no,1,no,furnished
+5943000,15600,3,1,1,yes,no,no,no,yes,2,no,semi-furnished
+5880000,7160,3,1,1,yes,no,yes,no,no,2,yes,unfurnished
+5880000,6500,3,2,3,yes,no,no,no,yes,0,no,unfurnished
+5873000,5500,3,1,3,yes,yes,no,no,yes,1,no,furnished
+5873000,11460,3,1,3,yes,no,no,no,no,2,yes,semi-furnished
+5866000,4800,3,1,1,yes,yes,yes,no,no,0,no,unfurnished
+5810000,5828,4,1,4,yes,yes,no,no,no,0,no,semi-furnished
+5810000,5200,3,1,3,yes,no,no,no,yes,0,no,semi-furnished
+5810000,4800,3,1,3,yes,no,no,no,yes,0,no,unfurnished
+5803000,7000,3,1,1,yes,no,yes,no,no,2,yes,semi-furnished
+5775000,6000,3,2,4,yes,no,no,no,yes,0,no,unfurnished
+5740000,5400,4,2,2,yes,no,no,no,yes,2,no,unfurnished
+5740000,4640,4,1,2,yes,no,no,no,no,1,no,semi-furnished
+5740000,5000,3,1,3,yes,no,no,no,yes,0,no,semi-furnished
+5740000,6360,3,1,1,yes,yes,yes,no,yes,2,yes,furnished
+5740000,5800,3,2,4,yes,no,no,no,yes,0,no,unfurnished
+5652500,6660,4,2,2,yes,yes,yes,no,no,1,yes,semi-furnished
+5600000,10500,4,2,2,yes,no,no,no,no,1,no,semi-furnished
+5600000,4800,5,2,3,no,no,yes,yes,no,0,no,unfurnished
+5600000,4700,4,1,2,yes,yes,yes,no,yes,1,no,furnished
+5600000,5000,3,1,4,yes,no,no,no,no,0,no,furnished
+5600000,10500,2,1,1,yes,no,no,no,no,1,no,semi-furnished
+5600000,5500,3,2,2,yes,no,no,no,no,1,no,semi-furnished
+5600000,6360,3,1,3,yes,no,no,no,no,0,yes,semi-furnished
+5600000,6600,4,2,1,yes,no,yes,no,no,0,yes,semi-furnished
+5600000,5136,3,1,2,yes,yes,yes,no,yes,0,yes,unfurnished
+5565000,4400,4,1,2,yes,no,no,no,yes,2,yes,semi-furnished
+5565000,5400,5,1,2,yes,yes,yes,no,yes,0,yes,furnished
+5530000,3300,3,3,2,yes,no,yes,no,no,0,no,semi-furnished
+5530000,3650,3,2,2,yes,no,no,no,no,2,no,semi-furnished
+5530000,6100,3,2,1,yes,no,yes,no,no,2,yes,furnished
+5523000,6900,3,1,1,yes,yes,yes,no,no,0,yes,semi-furnished
+5495000,2817,4,2,2,no,yes,yes,no,no,1,no,furnished
+5495000,7980,3,1,1,yes,no,no,no,no,2,no,semi-furnished
+5460000,3150,3,2,1,yes,yes,yes,no,yes,0,no,furnished
+5460000,6210,4,1,4,yes,yes,no,no,yes,0,no,furnished
+5460000,6100,3,1,3,yes,yes,no,no,yes,0,yes,semi-furnished
+5460000,6600,4,2,2,yes,yes,yes,no,no,0,yes,semi-furnished
+5425000,6825,3,1,1,yes,yes,yes,no,yes,0,yes,semi-furnished
+5390000,6710,3,2,2,yes,yes,yes,no,no,1,yes,furnished
+5383000,6450,3,2,1,yes,yes,yes,yes,no,0,no,unfurnished
+5320000,7800,3,1,1,yes,no,yes,no,yes,2,yes,unfurnished
+5285000,4600,2,2,1,yes,no,no,no,yes,2,no,semi-furnished
+5250000,4260,4,1,2,yes,no,yes,no,yes,0,no,furnished
+5250000,6540,4,2,2,no,no,no,no,yes,0,no,semi-furnished
+5250000,5500,3,2,1,yes,no,yes,no,no,0,no,semi-furnished
+5250000,10269,3,1,1,yes,no,no,no,no,1,yes,semi-furnished
+5250000,8400,3,1,2,yes,yes,yes,no,yes,2,yes,unfurnished
+5250000,5300,4,2,1,yes,no,no,no,yes,0,yes,unfurnished
+5250000,3800,3,1,2,yes,yes,yes,no,no,1,yes,unfurnished
+5250000,9800,4,2,2,yes,yes,no,no,no,2,no,semi-furnished
+5250000,8520,3,1,1,yes,no,no,no,yes,2,no,furnished
+5243000,6050,3,1,1,yes,no,yes,no,no,0,yes,semi-furnished
+5229000,7085,3,1,1,yes,yes,yes,no,no,2,yes,semi-furnished
+5215000,3180,3,2,2,yes,no,no,no,no,2,no,semi-furnished
+5215000,4500,4,2,1,no,no,yes,no,yes,2,no,semi-furnished
+5215000,7200,3,1,2,yes,yes,yes,no,no,1,yes,furnished
+5145000,3410,3,1,2,no,no,no,no,yes,0,no,semi-furnished
+5145000,7980,3,1,1,yes,no,no,no,no,1,yes,semi-furnished
+5110000,3000,3,2,2,yes,yes,yes,no,no,0,no,furnished
+5110000,3000,3,1,2,yes,no,yes,no,no,0,no,unfurnished
+5110000,11410,2,1,2,yes,no,no,no,no,0,yes,furnished
+5110000,6100,3,1,1,yes,no,yes,no,yes,0,yes,semi-furnished
+5075000,5720,2,1,2,yes,no,no,no,yes,0,yes,unfurnished
+5040000,3540,2,1,1,no,yes,yes,no,no,0,no,semi-furnished
+5040000,7600,4,1,2,yes,no,no,no,yes,2,no,furnished
+5040000,10700,3,1,2,yes,yes,yes,no,no,0,no,semi-furnished
+5040000,6600,3,1,1,yes,yes,yes,no,no,0,yes,furnished
+5033000,4800,2,1,1,yes,yes,yes,no,no,0,no,semi-furnished
+5005000,8150,3,2,1,yes,yes,yes,no,no,0,no,semi-furnished
+4970000,4410,4,3,2,yes,no,yes,no,no,2,no,semi-furnished
+4970000,7686,3,1,1,yes,yes,yes,yes,no,0,no,semi-furnished
+4956000,2800,3,2,2,no,no,yes,no,yes,1,no,semi-furnished
+4935000,5948,3,1,2,yes,no,no,no,yes,0,no,semi-furnished
+4907000,4200,3,1,2,yes,no,no,no,no,1,no,furnished
+4900000,4520,3,1,2,yes,no,yes,no,yes,0,no,semi-furnished
+4900000,4095,3,1,2,no,yes,yes,no,yes,0,no,semi-furnished
+4900000,4120,2,1,1,yes,no,yes,no,no,1,no,semi-furnished
+4900000,4900,3,1,2,yes,no,no,no,no,0,no,semi-furnished
+4900000,4770,3,1,1,yes,yes,yes,no,no,0,no,semi-furnished
+4900000,6300,3,1,1,yes,no,no,no,yes,2,no,semi-furnished
+4900000,5800,2,1,1,yes,yes,yes,no,yes,0,no,semi-furnished
+4900000,3000,3,1,2,yes,no,yes,no,yes,0,no,semi-furnished
+4900000,2970,3,1,3,yes,no,no,no,no,0,no,semi-furnished
+4900000,6720,3,1,1,yes,no,no,no,no,0,no,unfurnished
+4900000,4646,3,1,2,yes,yes,yes,no,no,2,no,semi-furnished
+4900000,12900,3,1,1,yes,no,no,no,no,2,no,furnished
+4893000,3420,4,2,2,yes,no,yes,no,yes,2,no,semi-furnished
+4893000,4995,4,2,1,yes,no,yes,no,no,0,no,semi-furnished
+4865000,4350,2,1,1,yes,no,yes,no,no,0,no,unfurnished
+4830000,4160,3,1,3,yes,no,no,no,no,0,no,unfurnished
+4830000,6040,3,1,1,yes,no,no,no,no,2,yes,semi-furnished
+4830000,6862,3,1,2,yes,no,no,no,yes,2,yes,furnished
+4830000,4815,2,1,1,yes,no,no,no,yes,0,yes,semi-furnished
+4795000,7000,3,1,2,yes,no,yes,no,no,0,no,unfurnished
+4795000,8100,4,1,4,yes,no,yes,no,yes,2,no,semi-furnished
+4767000,3420,4,2,2,yes,no,no,no,no,0,no,semi-furnished
+4760000,9166,2,1,1,yes,no,yes,no,yes,2,no,semi-furnished
+4760000,6321,3,1,2,yes,no,yes,no,yes,1,no,furnished
+4760000,10240,2,1,1,yes,no,no,no,yes,2,yes,unfurnished
+4753000,6440,2,1,1,yes,no,no,no,yes,3,no,semi-furnished
+4690000,5170,3,1,4,yes,no,no,no,yes,0,no,semi-furnished
+4690000,6000,2,1,1,yes,no,yes,no,yes,1,no,furnished
+4690000,3630,3,1,2,yes,no,no,no,no,2,no,semi-furnished
+4690000,9667,4,2,2,yes,yes,yes,no,no,1,no,semi-furnished
+4690000,5400,2,1,2,yes,no,no,no,no,0,yes,semi-furnished
+4690000,4320,3,1,1,yes,no,no,no,no,0,yes,semi-furnished
+4655000,3745,3,1,2,yes,no,yes,no,no,0,no,furnished
+4620000,4160,3,1,1,yes,yes,yes,no,yes,0,no,unfurnished
+4620000,3880,3,2,2,yes,no,yes,no,no,2,no,semi-furnished
+4620000,5680,3,1,2,yes,yes,no,no,yes,1,no,semi-furnished
+4620000,2870,2,1,2,yes,yes,yes,no,no,0,yes,semi-furnished
+4620000,5010,3,1,2,yes,no,yes,no,no,0,no,semi-furnished
+4613000,4510,4,2,2,yes,no,yes,no,no,0,no,semi-furnished
+4585000,4000,3,1,2,yes,no,no,no,no,1,no,furnished
+4585000,3840,3,1,2,yes,no,no,no,no,1,yes,semi-furnished
+4550000,3760,3,1,1,yes,no,no,no,no,2,no,semi-furnished
+4550000,3640,3,1,2,yes,no,no,no,yes,0,no,furnished
+4550000,2550,3,1,2,yes,no,yes,no,no,0,no,furnished
+4550000,5320,3,1,2,yes,yes,yes,no,no,0,yes,semi-furnished
+4550000,5360,3,1,2,yes,no,no,no,no,2,yes,unfurnished
+4550000,3520,3,1,1,yes,no,no,no,no,0,yes,semi-furnished
+4550000,8400,4,1,4,yes,no,no,no,no,3,no,unfurnished
+4543000,4100,2,2,1,yes,yes,yes,no,no,0,no,semi-furnished
+4543000,4990,4,2,2,yes,yes,yes,no,no,0,yes,furnished
+4515000,3510,3,1,3,yes,no,no,no,no,0,no,semi-furnished
+4515000,3450,3,1,2,yes,no,yes,no,no,1,no,semi-furnished
+4515000,9860,3,1,1,yes,no,no,no,no,0,no,semi-furnished
+4515000,3520,2,1,2,yes,no,no,no,no,0,yes,furnished
+4480000,4510,4,1,2,yes,no,no,no,yes,2,no,semi-furnished
+4480000,5885,2,1,1,yes,no,no,no,yes,1,no,unfurnished
+4480000,4000,3,1,2,yes,no,no,no,no,2,no,furnished
+4480000,8250,3,1,1,yes,no,no,no,no,0,no,furnished
+4480000,4040,3,1,2,yes,no,no,no,no,1,no,semi-furnished
+4473000,6360,2,1,1,yes,no,yes,no,yes,1,no,furnished
+4473000,3162,3,1,2,yes,no,no,no,yes,1,no,furnished
+4473000,3510,3,1,2,yes,no,no,no,no,0,no,semi-furnished
+4445000,3750,2,1,1,yes,yes,yes,no,no,0,no,semi-furnished
+4410000,3968,3,1,2,no,no,no,no,no,0,no,semi-furnished
+4410000,4900,2,1,2,yes,no,yes,no,no,0,no,semi-furnished
+4403000,2880,3,1,2,yes,no,no,no,no,0,yes,semi-furnished
+4403000,4880,3,1,1,yes,no,no,no,no,2,yes,unfurnished
+4403000,4920,3,1,2,yes,no,no,no,no,1,no,semi-furnished
+4382000,4950,4,1,2,yes,no,no,no,yes,0,no,semi-furnished
+4375000,3900,3,1,2,yes,no,no,no,no,0,no,unfurnished
+4340000,4500,3,2,3,yes,no,no,yes,no,1,no,furnished
+4340000,1905,5,1,2,no,no,yes,no,no,0,no,semi-furnished
+4340000,4075,3,1,1,yes,yes,yes,no,no,2,no,semi-furnished
+4340000,3500,4,1,2,yes,no,no,no,no,2,no,furnished
+4340000,6450,4,1,2,yes,no,no,no,no,0,no,semi-furnished
+4319000,4032,2,1,1,yes,no,yes,no,no,0,no,furnished
+4305000,4400,2,1,1,yes,no,no,no,no,1,no,semi-furnished
+4305000,10360,2,1,1,yes,no,no,no,no,1,yes,semi-furnished
+4277000,3400,3,1,2,yes,no,yes,no,no,2,yes,semi-furnished
+4270000,6360,2,1,1,yes,no,no,no,no,0,no,furnished
+4270000,6360,2,1,2,yes,no,no,no,no,0,no,unfurnished
+4270000,4500,2,1,1,yes,no,no,no,yes,2,no,furnished
+4270000,2175,3,1,2,no,yes,yes,no,yes,0,no,unfurnished
+4270000,4360,4,1,2,yes,no,no,no,no,0,no,furnished
+4270000,7770,2,1,1,yes,no,no,no,no,1,no,furnished
+4235000,6650,3,1,2,yes,yes,no,no,no,0,no,semi-furnished
+4235000,2787,3,1,1,yes,no,yes,no,no,0,yes,furnished
+4200000,5500,3,1,2,yes,no,no,no,yes,0,no,unfurnished
+4200000,5040,3,1,2,yes,no,yes,no,yes,0,no,unfurnished
+4200000,5850,2,1,1,yes,yes,yes,no,no,2,no,semi-furnished
+4200000,2610,4,3,2,no,no,no,no,no,0,no,semi-furnished
+4200000,2953,3,1,2,yes,no,yes,no,yes,0,no,unfurnished
+4200000,2747,4,2,2,no,no,no,no,no,0,no,semi-furnished
+4200000,4410,2,1,1,no,no,no,no,no,1,no,unfurnished
+4200000,4000,4,2,2,no,no,no,no,no,0,no,semi-furnished
+4200000,2325,3,1,2,no,no,no,no,no,0,no,semi-furnished
+4200000,4600,3,2,2,yes,no,no,no,yes,1,no,semi-furnished
+4200000,3640,3,2,2,yes,no,yes,no,no,0,no,unfurnished
+4200000,5800,3,1,1,yes,no,no,yes,no,2,no,semi-furnished
+4200000,7000,3,1,1,yes,no,no,no,no,3,no,furnished
+4200000,4079,3,1,3,yes,no,no,no,no,0,no,semi-furnished
+4200000,3520,3,1,2,yes,no,no,no,no,0,yes,semi-furnished
+4200000,2145,3,1,3,yes,no,no,no,no,1,yes,unfurnished
+4200000,4500,3,1,1,yes,no,yes,no,no,0,no,furnished
+4193000,8250,3,1,1,yes,no,yes,no,no,3,no,semi-furnished
+4193000,3450,3,1,2,yes,no,no,no,no,1,no,semi-furnished
+4165000,4840,3,1,2,yes,no,no,no,no,1,no,semi-furnished
+4165000,4080,3,1,2,yes,no,no,no,no,2,no,semi-furnished
+4165000,4046,3,1,2,yes,no,yes,no,no,1,no,semi-furnished
+4130000,4632,4,1,2,yes,no,no,no,yes,0,no,semi-furnished
+4130000,5985,3,1,1,yes,no,yes,no,no,0,no,semi-furnished
+4123000,6060,2,1,1,yes,no,yes,no,no,1,no,semi-furnished
+4098500,3600,3,1,1,yes,no,yes,no,yes,0,yes,furnished
+4095000,3680,3,2,2,yes,no,no,no,no,0,no,semi-furnished
+4095000,4040,2,1,2,yes,no,no,no,no,1,no,semi-furnished
+4095000,5600,2,1,1,yes,no,no,no,yes,0,no,semi-furnished
+4060000,5900,4,2,2,no,no,yes,no,no,1,no,unfurnished
+4060000,4992,3,2,2,yes,no,no,no,no,2,no,unfurnished
+4060000,4340,3,1,1,yes,no,no,no,no,0,no,semi-furnished
+4060000,3000,4,1,3,yes,no,yes,no,yes,2,no,semi-furnished
+4060000,4320,3,1,2,yes,no,no,no,no,2,yes,furnished
+4025000,3630,3,2,2,yes,no,no,yes,no,2,no,semi-furnished
+4025000,3460,3,2,1,yes,no,yes,no,yes,1,no,furnished
+4025000,5400,3,1,1,yes,no,no,no,no,3,no,semi-furnished
+4007500,4500,3,1,2,no,no,yes,no,yes,0,no,semi-furnished
+4007500,3460,4,1,2,yes,no,no,no,yes,0,no,semi-furnished
+3990000,4100,4,1,1,no,no,yes,no,no,0,no,unfurnished
+3990000,6480,3,1,2,no,no,no,no,yes,1,no,semi-furnished
+3990000,4500,3,2,2,no,no,yes,no,yes,0,no,semi-furnished
+3990000,3960,3,1,2,yes,no,no,no,no,0,no,furnished
+3990000,4050,2,1,2,yes,yes,yes,no,no,0,yes,unfurnished
+3920000,7260,3,2,1,yes,yes,yes,no,no,3,no,furnished
+3920000,5500,4,1,2,yes,yes,yes,no,no,0,no,semi-furnished
+3920000,3000,3,1,2,yes,no,no,no,no,0,no,semi-furnished
+3920000,3290,2,1,1,yes,no,no,yes,no,1,no,furnished
+3920000,3816,2,1,1,yes,no,yes,no,yes,2,no,furnished
+3920000,8080,3,1,1,yes,no,no,no,yes,2,no,semi-furnished
+3920000,2145,4,2,1,yes,no,yes,no,no,0,yes,unfurnished
+3885000,3780,2,1,2,yes,yes,yes,no,no,0,no,semi-furnished
+3885000,3180,4,2,2,yes,no,no,no,no,0,no,furnished
+3850000,5300,5,2,2,yes,no,no,no,no,0,no,semi-furnished
+3850000,3180,2,2,1,yes,no,yes,no,no,2,no,semi-furnished
+3850000,7152,3,1,2,yes,no,no,no,yes,0,no,furnished
+3850000,4080,2,1,1,yes,no,no,no,no,0,no,semi-furnished
+3850000,3850,2,1,1,yes,no,no,no,no,0,no,semi-furnished
+3850000,2015,3,1,2,yes,no,yes,no,no,0,yes,semi-furnished
+3850000,2176,2,1,2,yes,yes,no,no,no,0,yes,semi-furnished
+3836000,3350,3,1,2,yes,no,no,no,no,0,no,unfurnished
+3815000,3150,2,2,1,no,no,yes,no,no,0,no,semi-furnished
+3780000,4820,3,1,2,yes,no,no,no,no,0,no,semi-furnished
+3780000,3420,2,1,2,yes,no,no,yes,no,1,no,semi-furnished
+3780000,3600,2,1,1,yes,no,no,no,no,0,no,semi-furnished
+3780000,5830,2,1,1,yes,no,no,no,no,2,no,unfurnished
+3780000,2856,3,1,3,yes,no,no,no,no,0,yes,furnished
+3780000,8400,2,1,1,yes,no,no,no,no,1,no,furnished
+3773000,8250,3,1,1,yes,no,no,no,no,2,no,furnished
+3773000,2520,5,2,1,no,no,yes,no,yes,1,no,furnished
+3773000,6930,4,1,2,no,no,no,no,no,1,no,furnished
+3745000,3480,2,1,1,yes,no,no,no,no,0,yes,semi-furnished
+3710000,3600,3,1,1,yes,no,no,no,no,1,no,unfurnished
+3710000,4040,2,1,1,yes,no,no,no,no,0,no,semi-furnished
+3710000,6020,3,1,1,yes,no,no,no,no,0,no,semi-furnished
+3710000,4050,2,1,1,yes,no,no,no,no,0,no,furnished
+3710000,3584,2,1,1,yes,no,no,yes,no,0,no,semi-furnished
+3703000,3120,3,1,2,no,no,yes,yes,no,0,no,semi-furnished
+3703000,5450,2,1,1,yes,no,no,no,no,0,no,furnished
+3675000,3630,2,1,1,yes,no,yes,no,no,0,no,furnished
+3675000,3630,2,1,1,yes,no,no,no,yes,0,no,unfurnished
+3675000,5640,2,1,1,no,no,no,no,no,0,no,semi-furnished
+3675000,3600,2,1,1,yes,no,no,no,no,0,no,furnished
+3640000,4280,2,1,1,yes,no,no,no,yes,2,no,semi-furnished
+3640000,3570,3,1,2,yes,no,yes,no,no,0,no,semi-furnished
+3640000,3180,3,1,2,no,no,yes,no,no,0,no,semi-furnished
+3640000,3000,2,1,2,yes,no,no,no,yes,0,no,furnished
+3640000,3520,2,2,1,yes,no,yes,no,no,0,no,semi-furnished
+3640000,5960,3,1,2,yes,yes,yes,no,no,0,no,unfurnished
+3640000,4130,3,2,2,yes,no,no,no,no,2,no,semi-furnished
+3640000,2850,3,2,2,no,no,yes,no,no,0,yes,unfurnished
+3640000,2275,3,1,3,yes,no,no,yes,yes,0,yes,semi-furnished
+3633000,3520,3,1,1,yes,no,no,no,no,2,yes,unfurnished
+3605000,4500,2,1,1,yes,no,no,no,no,0,no,semi-furnished
+3605000,4000,2,1,1,yes,no,no,no,no,0,yes,semi-furnished
+3570000,3150,3,1,2,yes,no,yes,no,no,0,no,furnished
+3570000,4500,4,2,2,yes,no,yes,no,no,2,no,furnished
+3570000,4500,2,1,1,no,no,no,no,no,0,no,furnished
+3570000,3640,2,1,1,yes,no,no,no,no,0,no,unfurnished
+3535000,3850,3,1,1,yes,no,no,no,no,2,no,unfurnished
+3500000,4240,3,1,2,yes,no,no,no,yes,0,no,semi-furnished
+3500000,3650,3,1,2,yes,no,no,no,no,0,no,unfurnished
+3500000,4600,4,1,2,yes,no,no,no,no,0,no,semi-furnished
+3500000,2135,3,2,2,no,no,no,no,no,0,no,unfurnished
+3500000,3036,3,1,2,yes,no,yes,no,no,0,no,semi-furnished
+3500000,3990,3,1,2,yes,no,no,no,no,0,no,semi-furnished
+3500000,7424,3,1,1,no,no,no,no,no,0,no,unfurnished
+3500000,3480,3,1,1,no,no,no,no,yes,0,no,unfurnished
+3500000,3600,6,1,2,yes,no,no,no,no,1,no,unfurnished
+3500000,3640,2,1,1,yes,no,no,no,no,1,no,semi-furnished
+3500000,5900,2,1,1,yes,no,no,no,no,1,no,furnished
+3500000,3120,3,1,2,yes,no,no,no,no,1,no,unfurnished
+3500000,7350,2,1,1,yes,no,no,no,no,1,no,semi-furnished
+3500000,3512,2,1,1,yes,no,no,no,no,1,yes,unfurnished
+3500000,9500,3,1,2,yes,no,no,no,no,3,yes,unfurnished
+3500000,5880,2,1,1,yes,no,no,no,no,0,no,unfurnished
+3500000,12944,3,1,1,yes,no,no,no,no,0,no,unfurnished
+3493000,4900,3,1,2,no,no,no,no,no,0,no,unfurnished
+3465000,3060,3,1,1,yes,no,no,no,no,0,no,unfurnished
+3465000,5320,2,1,1,yes,no,no,no,no,1,yes,unfurnished
+3465000,2145,3,1,3,yes,no,no,no,no,0,yes,furnished
+3430000,4000,2,1,1,yes,no,no,no,no,0,no,unfurnished
+3430000,3185,2,1,1,yes,no,no,no,no,2,no,unfurnished
+3430000,3850,3,1,1,yes,no,no,no,no,0,no,unfurnished
+3430000,2145,3,1,3,yes,no,no,no,no,0,yes,furnished
+3430000,2610,3,1,2,yes,no,yes,no,no,0,yes,unfurnished
+3430000,1950,3,2,2,yes,no,yes,no,no,0,yes,unfurnished
+3423000,4040,2,1,1,yes,no,no,no,no,0,no,unfurnished
+3395000,4785,3,1,2,yes,yes,yes,no,yes,1,no,furnished
+3395000,3450,3,1,1,yes,no,yes,no,no,2,no,unfurnished
+3395000,3640,2,1,1,yes,no,no,no,no,0,no,furnished
+3360000,3500,4,1,2,yes,no,no,no,yes,2,no,unfurnished
+3360000,4960,4,1,3,no,no,no,no,no,0,no,semi-furnished
+3360000,4120,2,1,2,yes,no,no,no,no,0,no,unfurnished
+3360000,4750,2,1,1,yes,no,no,no,no,0,no,unfurnished
+3360000,3720,2,1,1,no,no,no,no,yes,0,no,unfurnished
+3360000,3750,3,1,1,yes,no,no,no,no,0,no,unfurnished
+3360000,3100,3,1,2,no,no,yes,no,no,0,no,semi-furnished
+3360000,3185,2,1,1,yes,no,yes,no,no,2,no,furnished
+3353000,2700,3,1,1,no,no,no,no,no,0,no,furnished
+3332000,2145,3,1,2,yes,no,yes,no,no,0,yes,furnished
+3325000,4040,2,1,1,yes,no,no,no,no,1,no,unfurnished
+3325000,4775,4,1,2,yes,no,no,no,no,0,no,unfurnished
+3290000,2500,2,1,1,no,no,no,no,yes,0,no,unfurnished
+3290000,3180,4,1,2,yes,no,yes,no,yes,0,no,unfurnished
+3290000,6060,3,1,1,yes,yes,yes,no,no,0,no,furnished
+3290000,3480,4,1,2,no,no,no,no,no,1,no,semi-furnished
+3290000,3792,4,1,2,yes,no,no,no,no,0,no,semi-furnished
+3290000,4040,2,1,1,yes,no,no,no,no,0,no,unfurnished
+3290000,2145,3,1,2,yes,no,yes,no,no,0,yes,furnished
+3290000,5880,3,1,1,yes,no,no,no,no,1,no,unfurnished
+3255000,4500,2,1,1,no,no,no,no,no,0,no,semi-furnished
+3255000,3930,2,1,1,no,no,no,no,no,0,no,unfurnished
+3234000,3640,4,1,2,yes,no,yes,no,no,0,no,unfurnished
+3220000,4370,3,1,2,yes,no,no,no,no,0,no,unfurnished
+3220000,2684,2,1,1,yes,no,no,no,yes,1,no,unfurnished
+3220000,4320,3,1,1,no,no,no,no,no,1,no,unfurnished
+3220000,3120,3,1,2,no,no,no,no,no,0,no,furnished
+3150000,3450,1,1,1,yes,no,no,no,no,0,no,furnished
+3150000,3986,2,2,1,no,yes,yes,no,no,1,no,unfurnished
+3150000,3500,2,1,1,no,no,yes,no,no,0,no,semi-furnished
+3150000,4095,2,1,1,yes,no,no,no,no,2,no,semi-furnished
+3150000,1650,3,1,2,no,no,yes,no,no,0,no,unfurnished
+3150000,3450,3,1,2,yes,no,yes,no,no,0,no,semi-furnished
+3150000,6750,2,1,1,yes,no,no,no,no,0,no,semi-furnished
+3150000,9000,3,1,2,yes,no,no,no,no,2,no,semi-furnished
+3150000,3069,2,1,1,yes,no,no,no,no,1,no,unfurnished
+3143000,4500,3,1,2,yes,no,no,no,yes,0,no,unfurnished
+3129000,5495,3,1,1,yes,no,yes,no,no,0,no,unfurnished
+3118850,2398,3,1,1,yes,no,no,no,no,0,yes,semi-furnished
+3115000,3000,3,1,1,no,no,no,no,yes,0,no,unfurnished
+3115000,3850,3,1,2,yes,no,no,no,no,0,no,unfurnished
+3115000,3500,2,1,1,yes,no,no,no,no,0,no,unfurnished
+3087000,8100,2,1,1,yes,no,no,no,no,1,no,unfurnished
+3080000,4960,2,1,1,yes,no,yes,no,yes,0,no,unfurnished
+3080000,2160,3,1,2,no,no,yes,no,no,0,no,semi-furnished
+3080000,3090,2,1,1,yes,yes,yes,no,no,0,no,unfurnished
+3080000,4500,2,1,2,yes,no,no,yes,no,1,no,semi-furnished
+3045000,3800,2,1,1,yes,no,no,no,no,0,no,unfurnished
+3010000,3090,3,1,2,no,no,no,no,no,0,no,semi-furnished
+3010000,3240,3,1,2,yes,no,no,no,no,2,no,semi-furnished
+3010000,2835,2,1,1,yes,no,no,no,no,0,no,semi-furnished
+3010000,4600,2,1,1,yes,no,no,no,no,0,no,furnished
+3010000,5076,3,1,1,no,no,no,no,no,0,no,unfurnished
+3010000,3750,3,1,2,yes,no,no,no,no,0,no,unfurnished
+3010000,3630,4,1,2,yes,no,no,no,no,3,no,semi-furnished
+3003000,8050,2,1,1,yes,no,no,no,no,0,no,unfurnished
+2975000,4352,4,1,2,no,no,no,no,no,1,no,unfurnished
+2961000,3000,2,1,2,yes,no,no,no,no,0,no,semi-furnished
+2940000,5850,3,1,2,yes,no,yes,no,no,1,no,unfurnished
+2940000,4960,2,1,1,yes,no,no,no,no,0,no,unfurnished
+2940000,3600,3,1,2,no,no,no,no,no,1,no,unfurnished
+2940000,3660,4,1,2,no,no,no,no,no,0,no,unfurnished
+2940000,3480,3,1,2,no,no,no,no,no,1,no,semi-furnished
+2940000,2700,2,1,1,no,no,no,no,no,0,no,furnished
+2940000,3150,3,1,2,no,no,no,no,no,0,no,unfurnished
+2940000,6615,3,1,2,yes,no,no,no,no,0,no,semi-furnished
+2870000,3040,2,1,1,no,no,no,no,no,0,no,unfurnished
+2870000,3630,2,1,1,yes,no,no,no,no,0,no,unfurnished
+2870000,6000,2,1,1,yes,no,no,no,no,0,no,semi-furnished
+2870000,5400,4,1,2,yes,no,no,no,no,0,no,unfurnished
+2852500,5200,4,1,3,yes,no,no,no,no,0,no,unfurnished
+2835000,3300,3,1,2,no,no,no,no,no,1,no,semi-furnished
+2835000,4350,3,1,2,no,no,no,yes,no,1,no,unfurnished
+2835000,2640,2,1,1,no,no,no,no,no,1,no,furnished
+2800000,2650,3,1,2,yes,no,yes,no,no,1,no,unfurnished
+2800000,3960,3,1,1,yes,no,no,no,no,0,no,furnished
+2730000,6800,2,1,1,yes,no,no,no,no,0,no,unfurnished
+2730000,4000,3,1,2,yes,no,no,no,no,1,no,unfurnished
+2695000,4000,2,1,1,yes,no,no,no,no,0,no,unfurnished
+2660000,3934,2,1,1,yes,no,no,no,no,0,no,unfurnished
+2660000,2000,2,1,2,yes,no,no,no,no,0,no,semi-furnished
+2660000,3630,3,3,2,no,yes,no,no,no,0,no,unfurnished
+2660000,2800,3,1,1,yes,no,no,no,no,0,no,unfurnished
+2660000,2430,3,1,1,no,no,no,no,no,0,no,unfurnished
+2660000,3480,2,1,1,yes,no,no,no,no,1,no,semi-furnished
+2660000,4000,3,1,1,yes,no,no,no,no,0,no,semi-furnished
+2653000,3185,2,1,1,yes,no,no,no,yes,0,no,unfurnished
+2653000,4000,3,1,2,yes,no,no,no,yes,0,no,unfurnished
+2604000,2910,2,1,1,no,no,no,no,no,0,no,unfurnished
+2590000,3600,2,1,1,yes,no,no,no,no,0,no,unfurnished
+2590000,4400,2,1,1,yes,no,no,no,no,0,no,unfurnished
+2590000,3600,2,2,2,yes,no,yes,no,no,1,no,furnished
+2520000,2880,3,1,1,no,no,no,no,no,0,no,unfurnished
+2520000,3180,3,1,1,no,no,no,no,no,0,no,unfurnished
+2520000,3000,2,1,2,yes,no,no,no,no,0,no,furnished
+2485000,4400,3,1,2,yes,no,no,no,no,0,no,unfurnished
+2485000,3000,3,1,2,no,no,no,no,no,0,no,semi-furnished
+2450000,3210,3,1,2,yes,no,yes,no,no,0,no,unfurnished
+2450000,3240,2,1,1,no,yes,no,no,no,1,no,unfurnished
+2450000,3000,2,1,1,yes,no,no,no,no,1,no,unfurnished
+2450000,3500,2,1,1,yes,yes,no,no,no,0,no,unfurnished
+2450000,4840,2,1,2,yes,no,no,no,no,0,no,unfurnished
+2450000,7700,2,1,1,yes,no,no,no,no,0,no,unfurnished
+2408000,3635,2,1,1,no,no,no,no,no,0,no,unfurnished
+2380000,2475,3,1,2,yes,no,no,no,no,0,no,furnished
+2380000,2787,4,2,2,yes,no,no,no,no,0,no,furnished
+2380000,3264,2,1,1,yes,no,no,no,no,0,no,unfurnished
+2345000,3640,2,1,1,yes,no,no,no,no,0,no,unfurnished
+2310000,3180,2,1,1,yes,no,no,no,no,0,no,unfurnished
+2275000,1836,2,1,1,no,no,yes,no,no,0,no,semi-furnished
+2275000,3970,1,1,1,no,no,no,no,no,0,no,unfurnished
+2275000,3970,3,1,2,yes,no,yes,no,no,0,no,unfurnished
+2240000,1950,3,1,1,no,no,no,yes,no,0,no,unfurnished
+2233000,5300,3,1,1,no,no,no,no,yes,0,yes,unfurnished
+2135000,3000,2,1,1,no,no,no,no,no,0,no,unfurnished
+2100000,2400,3,1,2,yes,no,no,no,no,0,no,unfurnished
+2100000,3000,4,1,2,yes,no,no,no,no,0,no,unfurnished
+2100000,3360,2,1,1,yes,no,no,no,no,1,no,unfurnished
+1960000,3420,5,1,2,no,no,no,no,no,0,no,unfurnished
+1890000,1700,3,1,2,yes,no,no,no,no,0,no,unfurnished
+1890000,3649,2,1,1,yes,no,no,no,no,0,no,unfurnished
+1855000,2990,2,1,1,no,no,no,no,no,1,no,unfurnished
+1820000,3000,2,1,1,yes,no,yes,no,no,2,no,unfurnished
+1767150,2400,3,1,1,no,no,no,no,no,0,no,semi-furnished
+1750000,3620,2,1,1,yes,no,no,no,no,0,no,unfurnished
+1750000,2910,3,1,1,no,no,no,no,no,0,no,furnished
+1750000,3850,3,1,2,yes,no,no,no,no,0,no,unfurnished`;
+
+// ─── Matrix Math helpers ─────────────────────────────────────────────────────
+function matMul(A, B) {
+  const r = A.length, c = B[0].length, k = B.length;
+  const C = Array.from({length:r}, () => new Array(c).fill(0));
+  for (let i=0;i<r;i++) for (let j=0;j<c;j++) for (let l=0;l<k;l++) C[i][j]+=A[i][l]*B[l][j];
+  return C;
+}
+function transpose(A) {
+  return A[0].map((_,j) => A.map(row => row[j]));
+}
+// Gauss-Jordan inverse for small square matrices
+function inverse(M) {
+  const n = M.length;
+  const aug = M.map((row,i) => { const r=[...row]; for(let j=0;j<n;j++) r.push(j===i?1:0); return r; });
+  for (let col=0;col<n;col++) {
+    let pivot = col;
+    for (let row=col+1;row<n;row++) if(Math.abs(aug[row][col])>Math.abs(aug[pivot][col])) pivot=row;
+    [aug[col],aug[pivot]]=[aug[pivot],aug[col]];
+    const d=aug[col][col];
+    if(Math.abs(d)<1e-12) return null;
+    for(let j=0;j<2*n;j++) aug[col][j]/=d;
+    for(let row=0;row<n;row++) if(row!==col) { const f=aug[row][col]; for(let j=0;j<2*n;j++) aug[row][j]-=f*aug[col][j]; }
+  }
+  return aug.map(row => row.slice(n));
+}
+
+// ─── Parse CSV & encode features ─────────────────────────────────────────────
+function parseData(csv) {
+  const lines = csv.trim().split('\n');
+  const rows = lines.slice(1).map(l => l.split(','));
+  const furnMap = { furnished: 1, 'semi-furnished': 0.5, unfurnished: 0 };
+  const yn = v => v.trim()==='yes' ? 1 : 0;
+  return rows.map(r => ({
+    price:           +r[0],
+    area:            +r[1],
+    bedrooms:        +r[2],
+    bathrooms:       +r[3],
+    stories:         +r[4],
+    mainroad:        yn(r[5]),
+    guestroom:       yn(r[6]),
+    basement:        yn(r[7]),
+    hotwaterheating: yn(r[8]),
+    airconditioning: yn(r[9]),
+    parking:         +r[10],
+    prefarea:        yn(r[11]),
+    furnishing:      furnMap[r[12].trim()] ?? 0,
+  }));
+}
+
+const FEAT_NAMES = ['area','bedrooms','bathrooms','stories','mainroad','guestroom',
+                    'basement','hotwaterheating','airconditioning','parking','prefarea','furnishing'];
+
+function buildXY(data) {
+  const X = data.map(d => [1, d.area, d.bedrooms, d.bathrooms, d.stories,
+    d.mainroad, d.guestroom, d.basement, d.hotwaterheating,
+    d.airconditioning, d.parking, d.prefarea, d.furnishing]);
+  const Y = data.map(d => [d.price]);
+  return {X, Y};
+}
+
+// ─── OLS: β = (XᵀX)⁻¹ Xᵀ Y ──────────────────────────────────────────────────
+function trainOLS(X, Y) {
+  const Xt   = transpose(X);
+  const XtX  = matMul(Xt, X);
+  const XtXi = inverse(XtX);
+  if (!XtXi) throw new Error("Matrix not invertible");
+  const XtY  = matMul(Xt, Y);
+  return matMul(XtXi, XtY).map(r => r[0]);  // β vector
+}
+
+// ─── Metrics ─────────────────────────────────────────────────────────────────
+function metrics(actual, predicted) {
+  const n = actual.length;
+  const mean = actual.reduce((a,b)=>a+b,0)/n;
+  let ss_res=0, ss_tot=0, mse=0;
+  for(let i=0;i<n;i++){
+    ss_res += (actual[i]-predicted[i])**2;
+    ss_tot += (actual[i]-mean)**2;
+    mse    += (actual[i]-predicted[i])**2;
+  }
+  return { r2: 1-ss_res/ss_tot, rmse: Math.sqrt(mse/n) };
+}
+
+// ─── Bootstrap & Train ───────────────────────────────────────────────────────
+const data = parseData(RAW_CSV);
+const {X, Y} = buildXY(data);
+const t0 = performance.now();
+const beta = trainOLS(X, Y);
+const t1 = performance.now();
+
+const predicted = X.map(row => row.reduce((s,v,i)=>s+v*beta[i], 0));
+const actual    = Y.map(r=>r[0]);
+const {r2, rmse} = metrics(actual, predicted);
+
+// Fill stats
+document.getElementById('s-r2').textContent   = r2.toFixed(4);
+document.getElementById('s-rmse').textContent = '$' + Math.round(rmse/1000) + 'K';
+document.getElementById('s-mean').textContent = '$' + Math.round(actual.reduce((a,b)=>a+b,0)/actual.length/1000000*100)/100 + 'M';
+document.getElementById('trainTime').textContent = (t1-t0).toFixed(1);
+
+// ─── Predict function ─────────────────────────────────────────────────────────
+function predict() {
+  const row = [
+    1,
+    +document.getElementById('f-area').value,
+    +document.getElementById('f-bedrooms').value,
+    +document.getElementById('f-bathrooms').value,
+    +document.getElementById('f-stories').value,
+    +document.getElementById('f-mainroad').value,
+    +document.getElementById('f-guestroom').value,
+    +document.getElementById('f-basement').value,
+    +document.getElementById('f-hotwaterheating').value,
+    +document.getElementById('f-airconditioning').value,
+    +document.getElementById('f-parking').value,
+    +document.getElementById('f-prefarea').value,
+    +document.getElementById('f-furnishing').value,
+  ];
+  const price = Math.max(0, row.reduce((s,v,i)=>s+v*beta[i], 0));
+  const fmt   = v => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(v);
+  document.getElementById('resultPrice').textContent = fmt(price);
+  document.getElementById('resultSub').textContent   = `Based on ${data.length} training samples · R² = ${r2.toFixed(4)}`;
+  const box = document.getElementById('resultBox');
+  box.style.display = 'block';
+  box.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+// ─── Actual vs Predicted chart ────────────────────────────────────────────────
+(function buildAvpChart() {
+  const step  = Math.ceil(actual.length / 80);
+  const idx   = actual.map((_,i)=>i).filter(i=>i%step===0).slice(0,80);
+  const act   = idx.map(i=>Math.round(actual[i]/1000));
+  const pred  = idx.map(i=>Math.round(predicted[i]/1000));
+  const labels= idx.map(i=>i+1);
+  new Chart(document.getElementById('avpChart'), {
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'Actual',data:act,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.08)',pointRadius:3,tension:.3},
+        {label:'Predicted',data:pred,borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.08)',pointRadius:3,tension:.3,borderDash:[5,3]},
+      ]
+    },
+    options:{
+      responsive:true,
+      plugins:{legend:{position:'top'},tooltip:{callbacks:{label:c=>`${c.dataset.label}: $${c.parsed.y}K`}}},
+      scales:{
+        y:{title:{display:true,text:'Price (000s)'},ticks:{callback:v=>'$'+v+'K'}},
+        x:{title:{display:true,text:'Sample Index'}}
+      }
+    }
+  });
+})();
+
+// ─── Feature Importance ───────────────────────────────────────────────────────
+(function buildFI() {
+  const stds = FEAT_NAMES.map((_,fi) => {
+    const vals = data.map(d => [d.area,d.bedrooms,d.bathrooms,d.stories,d.mainroad,d.guestroom,d.basement,d.hotwaterheating,d.airconditioning,d.parking,d.prefarea,d.furnishing][fi]);
+    const mean = vals.reduce((a,b)=>a+b,0)/vals.length;
+    const std  = Math.sqrt(vals.reduce((s,v)=>s+(v-mean)**2,0)/vals.length);
+    return std || 1;
+  });
+  const coefs   = beta.slice(1); // skip intercept
+  const impacts = coefs.map((c,i) => Math.abs(c * stds[i]));
+  const maxImp  = Math.max(...impacts);
+  const paired  = FEAT_NAMES.map((n,i)=>({name:n,imp:impacts[i]})).sort((a,b)=>b.imp-a.imp);
+
+  const cont = document.getElementById('fiContainer');
+  paired.forEach(({name, imp}) => {
+    const pct = (imp/maxImp*100).toFixed(1);
+    cont.innerHTML += `
+      <div class="fi-bar-wrap">
+        <div class="fi-label"><span>${name}</span><span>${pct}%</span></div>
+        <div class="fi-track"><div class="fi-fill" style="width:${pct}%"></div></div>
+      </div>`;
+  });
+})();
+
+// ─── Residuals histogram ──────────────────────────────────────────────────────
+(function buildResidChart() {
+  const residuals = actual.map((a,i) => (a - predicted[i]) / 1000);
+  const BINS = 30;
+  const min  = Math.min(...residuals), max = Math.max(...residuals);
+  const bw   = (max-min)/BINS;
+  const counts = new Array(BINS).fill(0);
+  residuals.forEach(r => {
+    const b = Math.min(BINS-1, Math.floor((r-min)/bw));
+    counts[b]++;
+  });
+  const labels = counts.map((_,i) => Math.round(min+i*bw) + 'K');
+  new Chart(document.getElementById('residChart'), {
+    type:'bar',
+    data:{labels,datasets:[{label:'Count',data:counts,backgroundColor:'rgba(37,99,235,.65)',borderColor:'#2563eb',borderWidth:1}]},
+    options:{
+      responsive:true,
+      plugins:{legend:{display:false},tooltip:{callbacks:{title:([c])=>'Residual ≈ '+c.label,label:c=>`${c.parsed.y} houses`}}},
+      scales:{
+        y:{title:{display:true,text:'Frequency'}},
+        x:{title:{display:true,text:'Residual (Price Error in $000s)'},ticks:{maxTicksLimit:10}}
+      }
+    }
+  });
+})();
+</script>
+</body>
+</html>
